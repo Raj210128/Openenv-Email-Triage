@@ -1,0 +1,106 @@
+name: email-triage-env
+version: "1.0.0"
+description: >
+  A real-world email triage environment where an AI agent must classify,
+  prioritize, and respond to business emails. The agent processes an inbox
+  and must correctly triage emails by urgency, category, and draft appropriate
+  responses — simulating a key daily task for millions of knowledge workers.
+author: OpenEnv Hackathon Team
+license: MIT
+tags:
+  - openenv
+  - email
+  - triage
+  - nlp
+  - real-world
+  - productivity
+
+environment:
+  type: text
+  modality: language
+  deterministic: true
+
+observation_space:
+  type: object
+  description: Current inbox state with email content and metadata
+  fields:
+    inbox:
+      type: array
+      description: List of email objects in current inbox
+    current_email:
+      type: object
+      description: The email currently being processed
+    emails_processed:
+      type: integer
+      description: Number of emails processed so far
+    emails_remaining:
+      type: integer
+      description: Number of emails left to process
+    score_so_far:
+      type: float
+      description: Cumulative reward earned so far
+
+action_space:
+  type: object
+  description: Agent triage decision for the current email
+  fields:
+    urgency:
+      type: string
+      enum: [critical, high, medium, low, ignore]
+      description: Urgency classification for the email
+    category:
+      type: string
+      enum: [customer_complaint, sales_inquiry, internal_ops, hr, finance, spam, support, legal, pr, other]
+      description: Category classification
+    action:
+      type: string
+      enum: [reply, forward, archive, delete, escalate, flag_review]
+      description: Recommended action to take
+    draft_reply:
+      type: string
+      description: Draft reply text (required if action=reply, optional otherwise)
+    forward_to:
+      type: string
+      description: Department/person to forward to (required if action=forward or escalate)
+
+tasks:
+  - id: task_easy
+    name: Binary Spam Detection
+    difficulty: easy
+    description: >
+      Classify each email as spam or not-spam and assign basic urgency.
+      The agent only needs to correctly identify obvious spam vs. legitimate
+      emails from a clearly labeled dataset.
+    max_steps: 10
+    success_threshold: 0.75
+
+  - id: task_medium
+    name: Priority Inbox Triage
+    difficulty: medium
+    description: >
+      Triage a realistic mixed inbox: classify urgency (5 levels), assign
+      categories (10 types), and recommend correct actions. Partial credit
+      for close-but-not-exact classifications.
+    max_steps: 15
+    success_threshold: 0.65
+
+  - id: task_hard
+    name: Full Triage with Response Drafting
+    difficulty: hard
+    description: >
+      Complete triage pipeline: classify + action + draft contextually
+      appropriate reply. Replies are graded on tone, completeness,
+      professionalism, and addressing the sender's actual request.
+    max_steps: 20
+    success_threshold: 0.55
+
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  health: GET /health
+
+baseline_scores:
+  task_easy: 0.82
+  task_medium: 0.67
+  task_hard: 0.54
