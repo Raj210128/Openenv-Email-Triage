@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 📧 OpenEnv Email Triage Environment
 
 [![OpenEnv](https://img.shields.io/badge/OpenEnv-compliant-00d4ff?style=flat-square)](https://openenv.dev)
@@ -220,3 +221,16 @@ openenv-email-triage/
 ## License
 
 MIT © 2024 OpenEnv Hackathon Team
+=======
+---
+title: Openenv Email Triage
+emoji: 🌖
+colorFrom: purple
+colorTo: indigo
+sdk: docker
+pinned: false
+short_description: I built an AI-powered email triage system.
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+>>>>>>> cd1f31d4e18bc9b31dacc3102c4f119c99622835
