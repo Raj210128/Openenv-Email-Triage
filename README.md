@@ -1,3 +1,13 @@
+
+---
+title: OpenEnv Email Triage
+emoji: 📧
+sdk: docker
+app_port: 7860
+---
+# OpenEnv Email Triage
+
+AI-powered email triage system using FastAPI and Docker.
 <<<<<<< HEAD
 # 📧 OpenEnv Email Triage Environment
 
