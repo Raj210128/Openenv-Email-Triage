@@ -41,11 +41,8 @@ async def reset(request: Request):
     except:
         task_id = "task_easy"
 
-    try:
-        obs = env.reset(task_id=task_id)
-        return obs.model_dump()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    obs = env.reset(task_id=task_id)
+    return obs.model_dump()
 
 
 # ─── STEP ENDPOINT ─────────────────────────────────────────
