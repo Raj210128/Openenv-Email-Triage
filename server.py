@@ -29,8 +29,46 @@ env = EmailTriageEnv()
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "healthy"}
 
+@app.get("/metadata")
+async def metadata():
+    return {
+        "name": "OpenEnv Email Triage",
+        "description": "AI-powered email triage environment that classifies emails by urgency, category, and action."
+    }
+
+@app.post("/mcp")
+async def mcp():
+    return {
+        "jsonrpc": "2.0",
+        "result": {
+            "message": "MCP endpoint active"
+        },
+        "id": 1
+    }
+@app.get("/schema")
+async def schema():
+    return {
+        "action": {
+            "urgency": [e.value for e in UrgencyLevel],
+            "category": [e.value for e in EmailCategory],
+            "action": [e.value for e in EmailAction],
+            "draft_reply": "string (optional)",
+            "forward_to": "string (optional)",
+            "reasoning": "string (optional)"
+        },
+        "observation": {
+            "current_email": "object",
+            "done": "boolean",
+            "info": "object"
+        },
+        "state": {
+            "emails_processed": "int",
+            "current_step": "int",
+            "task_id": "string"
+        }
+    }
 
 # ✅ FIXED RESET (IMPORTANT)
 @app.post("/reset")
