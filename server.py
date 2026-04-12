@@ -5,6 +5,8 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from models import Action, UrgencyLevel, EmailCategory, EmailAction
 from environment import EmailTriageEnv
@@ -24,6 +26,10 @@ app.add_middleware(
 )
 
 env = EmailTriageEnv()
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ─── Endpoints ─────────────────────────────────────────────
 
@@ -145,4 +151,7 @@ async def list_tasks():
 
 @app.get("/")
 async def root():
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {"message": "OpenEnv Email Triage API running"}
