@@ -1,41 +1,42 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import sys
-import json
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fastapi import FastAPI
 from pydantic import BaseModel
-from openai import OpenAI
 
-# ─── FastAPI App ─────────────────────────────────────────
-app = FastAPI()
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
-# ─── Environment Variables ───────────────────────────────
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME   = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-HF_TOKEN     = os.environ.get("HF_TOKEN", os.environ.get("OPENAI_API_KEY", ""))
-
-# ❗ Prevent crash if token missing
-if not HF_TOKEN:
-    HF_TOKEN = "dummy-key"
-
-client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL)
-
-# ─── Safe Imports (IMPORTANT FIX) ─────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
 
 try:
-    from models import UrgencyLevel, EmailCategory, EmailAction
+    from models import EmailAction, EmailCategory, UrgencyLevel
 except Exception:
-    # fallback if import fails (prevents uvicorn crash)
-    UrgencyLevel = EmailCategory = EmailAction = None
+    EmailAction = EmailCategory = UrgencyLevel = None
 
-# ─── Prompt ──────────────────────────────────────────────
+
+app = FastAPI()
+
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
+API_KEY = (
+    os.environ.get("API_KEY")
+    or os.environ.get("OPENAI_API_KEY")
+    or os.environ.get("HF_TOKEN")
+    or ""
+)
+
+client = OpenAI(api_key=API_KEY, base_url=API_BASE_URL) if (OpenAI and API_KEY) else None
+
 SYSTEM_PROMPT = """You are an expert email triage assistant.
 
-Return ONLY valid JSON with:
+Return only valid JSON with:
 - urgency
 - category
 - action
@@ -44,21 +45,35 @@ Return ONLY valid JSON with:
 - reasoning
 """
 
-# ─── Request Schema ──────────────────────────────────────
+
 class InputData(BaseModel):
     input: Dict[str, Any]
 
-# ─── Helper Function ─────────────────────────────────────
-def clamp_enum(value: str, enum_cls):
+
+def clamp_enum(value: str, enum_cls, default: str) -> str:
     if enum_cls is None:
-        return value  # fallback if enums not available
-
+        return value or default
     valid = {e.value for e in enum_cls}
-    return value if value in valid else list(enum_cls)[0].value
+    if value in valid:
+        return value
+    return default
 
-# ─── Agent Logic ─────────────────────────────────────────
+
+def fallback_decision() -> Dict[str, Any]:
+    return {
+        "urgency": "medium",
+        "category": "other",
+        "action": "archive",
+        "draft_reply": None,
+        "forward_to": None,
+        "reasoning": "fallback",
+    }
+
+
 def agent_decide(email_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
+        if client is None:
+            return fallback_decision()
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
@@ -67,43 +82,74 @@ def agent_decide(email_data: Dict[str, Any]) -> Dict[str, Any]:
             ],
             temperature=0.1,
         )
-
         raw = response.choices[0].message.content or "{}"
         return json.loads(raw)
-
     except Exception:
-        return {
-            "urgency": "medium",
-            "category": "other",
-            "action": "archive",
-            "draft_reply": None,
-            "forward_to": None,
-            "reasoning": "fallback"
-        }
+        return fallback_decision()
 
-# ─── REQUIRED ENDPOINTS ──────────────────────────────────
 
-# ✅ FIXES YOUR ERROR
+def normalize_decision(decision: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "urgency": clamp_enum(
+            decision.get("urgency", "medium"),
+            UrgencyLevel,
+            "medium",
+        ),
+        "category": clamp_enum(
+            decision.get("category", "other"),
+            EmailCategory,
+            "other",
+        ),
+        "action": clamp_enum(
+            decision.get("action", "archive"),
+            EmailAction,
+            "archive",
+        ),
+        "draft_reply": decision.get("draft_reply"),
+        "forward_to": decision.get("forward_to"),
+        "reasoning": decision.get("reasoning", ""),
+    }
+
+
+def emit_block(tag: str, **fields: Any) -> None:
+    parts = [f"{key}={json.dumps(value)}" for key, value in fields.items()]
+    print(f"[{tag}] " + " ".join(parts), flush=True)
+
+
 @app.post("/reset")
-def reset():
+def reset() -> Dict[str, str]:
     return {"status": "reset successful"}
 
 
 @app.post("/predict")
-def predict(data: InputData):
-    email_data = data.input
+def predict(data: InputData) -> Dict[str, Any]:
+    return normalize_decision(agent_decide(data.input))
 
-    decision = agent_decide(email_data)
 
-    urgency  = clamp_enum(decision.get("urgency", "medium"), UrgencyLevel)
-    category = clamp_enum(decision.get("category", "other"), EmailCategory)
-    action   = clamp_enum(decision.get("action", "archive"), EmailAction)
+def run_cli() -> int:
+    try:
+        raw_input = sys.stdin.read().strip()
+        payload = json.loads(raw_input) if raw_input else {}
+    except Exception:
+        payload = {}
 
-    return {
-        "urgency": urgency,
-        "category": category,
-        "action": action,
-        "draft_reply": decision.get("draft_reply"),
-        "forward_to": decision.get("forward_to"),
-        "reasoning": decision.get("reasoning", "")
-    }
+    email_data = payload.get("input", payload) if isinstance(payload, dict) else {}
+
+    emit_block("START", task="email-triage", model=MODEL_NAME)
+
+    try:
+        decision = normalize_decision(agent_decide(email_data))
+        emit_block("STEP", step=1, reward=0.0, action=decision["action"])
+        emit_block("END", task="email-triage", score=0.0, steps=1)
+        print(json.dumps(decision), flush=True)
+        return 0
+    except Exception as exc:
+        safe_message = str(exc).replace("\n", " ")
+        emit_block("STEP", step=1, reward=0.0, error=safe_message)
+        emit_block("END", task="email-triage", score=0.0, steps=1)
+        print(json.dumps(fallback_decision()), flush=True)
+        return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_cli())
