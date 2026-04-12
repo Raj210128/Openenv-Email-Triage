@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenEnv — Email Triage Environment</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111418;
+    --border: #1e2530;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+  }
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+  .logo-sub {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+  .badge-green { border-color: var(--success); color: var(--success); background: rgba(16,185,129,0.08); }
+  .badge-blue  { border-color: var(--accent);  color: var(--accent);  background: rgba(0,212,255,0.08); }
+
+  /* Hero */
+  .hero { padding: 60px 0 40px; }
+  .hero h1 {
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 300;
+    letter-spacing: -1px;
+    line-height: 1.2;
+    margin-bottom: 16px;
+  }
+  .hero h1 span { color: var(--accent); font-weight: 600; }
+  .hero p { color: var(--muted); font-size: 16px; max-width: 600px; line-height: 1.7; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 40px 0;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 20px 24px;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Tasks */
+  .section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .tasks-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  .task-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+  }
+  .task-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .task-name { font-weight: 600; font-size: 15px; }
+  .difficulty {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .easy   { background: rgba(16,185,129,0.15); color: var(--success); }
+  .medium { background: rgba(245,158,11,0.15);  color: var(--warn); }
+  .hard   { background: rgba(239,68,68,0.15);   color: var(--danger); }
+
+  .task-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+  .task-meta {
+    display: flex;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .task-meta span { display: flex; align-items: center; gap: 4px; }
+
+  /* API playground */
+  .api-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 48px;
+  }
+  .api-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .api-header h2 { font-size: 15px; font-weight: 600; }
+  .api-tabs {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+
+  .api-body { padding: 24px; }
+  .endpoint-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .method {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .get  { background: rgba(16,185,129,0.2); color: var(--success); }
+  .post { background: rgba(0,212,255,0.2);  color: var(--accent); }
+  .url-input {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    outline: none;
+  }
+  .url-input:focus { border-color: var(--accent); }
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.8; }
+  .btn-primary { background: var(--accent); color: #000; font-weight: 700; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+  .body-editor {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 14px;
+    border-radius: 6px;
+    width: 100%;
+    height: 120px;
+    resize: vertical;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  .body-editor:focus { border-color: var(--accent); }
+
+  .response-area {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    color: var(--success);
+    margin-top: 12px;
+  }
+  .response-area.error { color: var(--danger); }
+
+  /* Score display */
+  .score-display {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .score-pill {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent);
+  }
+
+  /* Endpoints reference */
+  .endpoints-table { width: 100%; border-collapse: collapse; margin-bottom: 48px; }
+  .endpoints-table th {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .endpoints-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .endpoints-table tr:last-child td { border-bottom: none; }
+  code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: rgba(0,212,255,0.08);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 0;
+    margin-top: 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  @media (max-width: 768px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .tasks-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Loading pulse */
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .loading { animation: pulse 1.2s infinite; }
+</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">OE</div>
+        <div>
+          <div class="logo-text">openenv</div>
+          <div class="logo-sub">email-triage-env v1.0.0</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="badge badge-green" id="health-badge">● checking...</span>
+        <span class="badge badge-blue">step() / reset() / state()</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container">
+    <div class="hero">
+      <h1>Real-World <span>Email Triage</span><br>for AI Agents</h1>
+      <p>A fully compliant OpenEnv environment where agents learn to classify, prioritize, and respond to business emails — simulating a core daily task for millions of knowledge workers.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-value">3</span>
+        <span class="stat-label">Tasks</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">20</span>
+        <span class="stat-label">Emails (Hard)</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value">0–1</span>
+        <span class="stat-label">Reward Range</span>
+      </div>
+      <div class="stat">
+        <span class="stat-value" id="live-score">—</span>
+        <span class="stat-label">Live Score</span>
+      </div>
+    </div>
+
+    <div class="section-title">Tasks</div>
+
+    <div class="tasks-grid">
+      <div class="task-card" onclick="selectTask('task_easy')">
+        <div class="task-header">
+          <span class="task-name">Spam Detection</span>
+          <span class="difficulty easy">Easy</span>
+        </div>
+        <p class="task-desc">Binary classification of spam vs. legitimate emails with basic urgency assignment.</p>
+        <div class="task-meta">
+          <span>📧 10 emails</span>
+          <span>🎯 threshold: 0.75</span>
+        </div>
+      </div>
+      <div class="task-card" onclick="selectTask('task_medium')">
+        <div class="task-header">
+          <span class="task-name">Priority Triage</span>
+          <span class="difficulty medium">Medium</span>
+        </div>
+        <p class="task-desc">Full classification: 5-level urgency, 10 categories, 6 action types with partial credit.</p>
+        <div class="task-meta">
+          <span>📧 15 emails</span>
+          <span>🎯 threshold: 0.65</span>
+        </div>
+      </div>
+      <div class="task-card" onclick="selectTask('task_hard')">
+        <div class="task-header">
+          <span class="task-name">Triage + Drafting</span>
+          <span class="difficulty hard">Hard</span>
+        </div>
+        <p class="task-desc">Complete pipeline: triage + contextually appropriate reply drafting, graded on tone and completeness.</p>
+        <div class="task-meta">
+          <span>📧 20 emails</span>
+          <span>🎯 threshold: 0.55</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">API Playground</div>
+
+    <div class="api-section">
+      <div class="api-header">
+        <span>🔌</span>
+        <h2>Interactive API</h2>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--muted)">
+          Base URL: <code id="base-url">http://localhost:7860</code>
+        </span>
+      </div>
+      <div class="api-tabs">
+        <button class="tab active" onclick="showTab('reset')">reset()</button>
+        <button class="tab" onclick="showTab('step')">step()</button>
+        <button class="tab" onclick="showTab('state')">state()</button>
+        <button class="tab" onclick="showTab('health')">health</button>
+      </div>
+
+      <div class="api-body">
+        <!-- Reset tab -->
+        <div id="tab-reset">
+          <div class="endpoint-row">
+            <span class="method post">POST</span>
+            <input class="url-input" id="reset-url" value="/reset" readonly>
+          </div>
+          <textarea class="body-editor" id="reset-body">{"task_id": "task_easy"}</textarea>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="callReset()">▶ Send Request</button>
+            <select id="task-select" onchange="updateResetBody()" style="font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;cursor:pointer">
+              <option value="task_easy">task_easy</option>
+              <option value="task_medium">task_medium</option>
+              <option value="task_hard">task_hard</option>
+            </select>
+          </div>
+          <div class="response-area" id="reset-response">// Response will appear here</div>
+        </div>
+
+        <!-- Step tab -->
+        <div id="tab-step" style="display:none">
+          <div class="endpoint-row">
+            <span class="method post">POST</span>
+            <input class="url-input" id="step-url" value="/step" readonly>
+          </div>
+          <textarea class="body-editor" id="step-body" style="height:160px">{
+  "urgency": "high",
+  "category": "customer_complaint",
+  "action": "reply",
+  "draft_reply": "Thank you for reaching out. We sincerely apologize for the inconvenience and will resolve this immediately.",
+  "reasoning": "Legitimate complaint requiring immediate attention"
+}</textarea>
+          <button class="btn btn-primary" onclick="callStep()">▶ Send Request</button>
+          <div class="response-area" id="step-response">// Response will appear here</div>
+          <div class="score-display" id="step-score-display" style="display:none">
+            <div class="score-pill" id="step-reward">reward: —</div>
+            <div class="score-pill" id="step-feedback"></div>
+          </div>
+        </div>
+
+        <!-- State tab -->
+        <div id="tab-state" style="display:none">
+          <div class="endpoint-row">
+            <span class="method get">GET</span>
+            <input class="url-input" value="/state" readonly>
+          </div>
+          <button class="btn btn-primary" onclick="callState()">▶ Send Request</button>
+          <div class="response-area" id="state-response">// Response will appear here</div>
+        </div>
+
+        <!-- Health tab -->
+        <div id="tab-health" style="display:none">
+          <div class="endpoint-row">
+            <span class="method get">GET</span>
+            <input class="url-input" value="/health" readonly>
+          </div>
+          <button class="btn btn-primary" onclick="callHealth()">▶ Send Request</button>
+          <div class="response-area" id="health-response">// Response will appear here</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Endpoints Reference</div>
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="method post" style="display:inline-block">POST</span></td><td><code>/reset</code></td><td>Start new episode. Body: <code>{"task_id": "task_easy"}</code></td></tr>
+        <tr><td><span class="method post" style="display:inline-block">POST</span></td><td><code>/step</code></td><td>Submit action for current email. Returns observation + reward.</td></tr>
+        <tr><td><span class="method get" style="display:inline-block">GET</span></td><td><code>/state</code></td><td>Return full internal environment state.</td></tr>
+        <tr><td><span class="method get" style="display:inline-block">GET</span></td><td><code>/health</code></td><td>Health check — returns 200 OK.</td></tr>
+        <tr><td><span class="method get" style="display:inline-block">GET</span></td><td><code>/tasks</code></td><td>List all available tasks with metadata.</td></tr>
+        <tr><td><span class="method get" style="display:inline-block">GET</span></td><td><code>/action_space</code></td><td>Describe valid action enum values.</td></tr>
+        <tr><td><span class="method get" style="display:inline-block">GET</span></td><td><code>/docs</code></td><td>Interactive Swagger API documentation.</td></tr>
+      </tbody>
+    </table>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container" style="display:flex;justify-content:space-between;width:100%">
+    <span>openenv/email-triage-env — MIT License</span>
+    <span>OpenEnv Hackathon 2024</span>
+  </div>
+</footer>
+
+<script>
+  const BASE = window.location.origin;
+  document.getElementById('base-url').textContent = BASE;
+
+  // Health check on load
+  async function checkHealth() {
+    try {
+      const r = await fetch(BASE + '/health');
+      const data = await r.json();
+      const badge = document.getElementById('health-badge');
+      badge.textContent = '● online';
+      badge.className = 'badge badge-green';
+    } catch {
+      const badge = document.getElementById('health-badge');
+      badge.textContent = '● offline';
+      badge.style.borderColor = '#ef4444';
+      badge.style.color = '#ef4444';
+    }
+  }
+  checkHealth();
+
+  function showTab(name) {
+    ['reset','step','state','health'].forEach(t => {
+      document.getElementById('tab-'+t).style.display = t === name ? '' : 'none';
+      document.querySelectorAll('.tab').forEach((btn, i) => {
+        btn.classList.toggle('active', btn.textContent.includes(name === 'health' ? 'health' : name+'()'));
+      });
+    });
+  }
+
+  function selectTask(taskId) {
+    document.getElementById('task-select').value = taskId;
+    updateResetBody();
+    showTab('reset');
+    document.querySelectorAll('.tab')[0].classList.add('active');
+  }
+
+  function updateResetBody() {
+    const val = document.getElementById('task-select').value;
+    document.getElementById('reset-body').value = JSON.stringify({task_id: val}, null, 2);
+  }
+
+  async function callReset() {
+    const body = document.getElementById('reset-body').value;
+    const el = document.getElementById('reset-response');
+    el.textContent = '// loading...';
+    el.className = 'response-area loading';
+    try {
+      const r = await fetch(BASE + '/reset', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body
+      });
+      const data = await r.json();
+      el.textContent = JSON.stringify(data, null, 2);
+      el.className = 'response-area';
+    } catch(e) {
+      el.textContent = '// Error: ' + e.message;
+      el.className = 'response-area error';
+    }
+  }
+
+  async function callStep() {
+    const body = document.getElementById('step-body').value;
+    const el = document.getElementById('step-response');
+    el.textContent = '// loading...';
+    el.className = 'response-area loading';
+    try {
+      const r = await fetch(BASE + '/step', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body
+      });
+      const data = await r.json();
+      el.textContent = JSON.stringify(data, null, 2);
+      el.className = 'response-area';
+      if (data.reward) {
+        document.getElementById('step-score-display').style.display = 'flex';
+        document.getElementById('step-reward').textContent = 'reward: ' + data.reward.value?.toFixed(3);
+        document.getElementById('step-feedback').textContent = data.reward.feedback?.slice(0,60) || '';
+        document.getElementById('live-score').textContent = data.reward.value?.toFixed(3);
+      }
+    } catch(e) {
+      el.textContent = '// Error: ' + e.message;
+      el.className = 'response-area error';
+    }
+  }
+
+  async function callState() {
+    const el = document.getElementById('state-response');
+    el.textContent = '// loading...';
+    try {
+      const r = await fetch(BASE + '/state');
+      const data = await r.json();
+      el.textContent = JSON.stringify(data, null, 2);
+      el.className = 'response-area';
+    } catch(e) {
+      el.textContent = '// Error: ' + e.message;
+      el.className = 'response-area error';
+    }
+  }
+
+  async function callHealth() {
+    const el = document.getElementById('health-response');
+    try {
+      const r = await fetch(BASE + '/health');
+      const data = await r.json();
+      el.textContent = JSON.stringify(data, null, 2);
+      el.className = 'response-area';
+    } catch(e) {
+      el.textContent = '// Error: ' + e.message;
+      el.className = 'response-area error';
+    }
+  }
+</script>
+</body>
+</html>
